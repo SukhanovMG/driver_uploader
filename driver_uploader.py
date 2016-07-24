@@ -36,16 +36,26 @@ class host:
             print(stderr.read())
             print('==========')
 
-    def send_file(self, src, dst):
-        self.__scp.put(src, dst)
+    def put(self, src, dst, recursive=False):
+        self.__scp.put(src, dst, recursive)
 
+    def get(self, src, dst, recursive=False):
+        self.__scp.get(src, dst, recursive)
 
     def __del__(self):
         self.__scp.close()
         self.__ssh_client.close()
 
 
-nvt_dir = '/home/max/development/nvt'
+def get_current_dir():
+    cp = subprocess.run(["pwd"], stdout = subprocess.PIPE)
+    return cp.stdout
+
+drivers_local = '/home/max/development'
+nvt_dir_local = '/home/max/development/nvt'
+nvt_dir_make = '/home/sukhanov/nvt/'
+nvt_ver = '1.0.18'
+nvt_pack = 'nvt-{}.tar.gz'.format(nvt_ver)
 
 nvt_server_hostname = '192.168.24.106'
 nvt_server_user = 'root'
@@ -53,10 +63,28 @@ make_server_hostname = '192.168.204.32'
 make_server_user = 'sukhanov'
 
 
-nvt_server = host(nvt_server_hostname, nvt_server_user)
-make_server = host(make_server_hostname, make_server_user)
+# nvt_server = host(nvt_server_hostname, nvt_server_user)
+# make_server = host(make_server_hostname, make_server_user)
 
-#make_server.exec_cmd('ls -l')
-#make_server.send_file('scp.py', '~/scp.py')
 
-current_dir = 
+current_dir = get_current_dir()
+
+# создание tar.gz
+subprocess.run(["cd", nvt_dir_local])
+subprocess.run(["make", "package_source"])
+
+# загрузка на сборочный сервер
+make_server.put(nvt_pack, nvt_dir_make)
+
+# сборка на сборочном сервере
+make_server.exec_command("cd " + nvt_dir_make)
+make_server.exec_command("tar xvzf " + nvt_pack)
+make_server.exec_command("rm -f " + nvt_pack)
+make_server.exec_command("cd nvt-" + nvt_ver)
+make_server.exec_command("mkdir build")
+make_server.exec_command("cd build")
+make_server.exec_command("cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_MYSQL=1")
+make_server.exec_command("make -j4")
+
+# загрузка библиотеки с драйверами со сборочного сервера
+make_server.get(nvt_dir_make + "nvt-" + nvt_ver + "/build/bin/drivers/libnvtd_drivers.so", drivers_local)
