@@ -1,6 +1,7 @@
 #! /bin/env python
 
 import subprocess
+import os
 import getpass
 import paramiko
 import scp
@@ -46,15 +47,11 @@ class host:
         self.__scp.close()
         self.__ssh_client.close()
 
-
-def get_current_dir():
-    cp = subprocess.run(["pwd"], stdout = subprocess.PIPE)
-    return cp.stdout
-
 drivers_local = '/home/max/development'
 nvt_dir_local = '/home/max/development/nvt'
+nvt_dir_local_build = nvt_dir_local + '/build'
 nvt_dir_make = '/home/sukhanov/nvt/'
-nvt_ver = '1.0.18'
+nvt_ver = '1.0.17'
 nvt_pack = 'nvt-{}.tar.gz'.format(nvt_ver)
 
 nvt_server_hostname = '192.168.24.106'
@@ -63,28 +60,22 @@ make_server_hostname = '192.168.204.32'
 make_server_user = 'sukhanov'
 
 
-# nvt_server = host(nvt_server_hostname, nvt_server_user)
-# make_server = host(make_server_hostname, make_server_user)
+#nvt_server = host(nvt_server_hostname, nvt_server_user)
+make_server = host(make_server_hostname, make_server_user)
 
 
-current_dir = get_current_dir()
+current_dir = os.getcwd()
 
 # создание tar.gz
-subprocess.run(["cd", nvt_dir_local])
-subprocess.run(["make", "package_source"])
+os.chdir(nvt_dir_local_build)
+subprocess.run(["make package_source"], shell=True)
 
 # загрузка на сборочный сервер
-make_server.put(nvt_pack, nvt_dir_make)
+make_server.put(nvt_dir_local_build + '/' + nvt_pack, nvt_dir_make)
 
 # сборка на сборочном сервере
-make_server.exec_command("cd " + nvt_dir_make)
-make_server.exec_command("tar xvzf " + nvt_pack)
-make_server.exec_command("rm -f " + nvt_pack)
-make_server.exec_command("cd nvt-" + nvt_ver)
-make_server.exec_command("mkdir build")
-make_server.exec_command("cd build")
-make_server.exec_command("cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_MYSQL=1")
-make_server.exec_command("make -j4")
+cmd = "cd {0} && tar xvzf {1} && rm -f {1} && cd nvt-{2} && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_MYSQL=1 && make -j4".format(nvt_dir_make, nvt_pack, nvt_ver)
+make_server.exec_cmd(cmd)
 
 # загрузка библиотеки с драйверами со сборочного сервера
 make_server.get(nvt_dir_make + "nvt-" + nvt_ver + "/build/bin/drivers/libnvtd_drivers.so", drivers_local)
